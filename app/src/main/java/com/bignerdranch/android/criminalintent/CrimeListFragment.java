@@ -19,18 +19,13 @@ import com.bignerdranch.android.criminalintent.model.CrimeLab;
 import java.util.List;
 
 /**
- * Created by lmiceli on 11/05/2016.
+ *
  */
 public class CrimeListFragment extends Fragment {
 
 
     private RecyclerView mCrimeRecyclerView;
     private CrimeAdapter mAdapter;
-    // optimization for updateUI on resume, might not work on low memory conditions, but is an easy to
-    // code solution that will work most of the time, and would do the normal/slower way when not.
-    // this was from a challenge in the book to fix which is apparently not much of a performance issue anyway.
-    // NOTE: removed after new changes made dificult to maintain
-    // private Integer mCrimeOpenForEdition = null;
     private static final String TAG = "CrimeListFragment";
 
     @Nullable
@@ -61,20 +56,10 @@ public class CrimeListFragment extends Fragment {
             mAdapter = new CrimeAdapter(crimes);
             mCrimeRecyclerView.setAdapter(mAdapter);
         } else {
-            notifyChanges();
+            mAdapter.notifyDataSetChanged();
         }
     }
 
-    private void notifyChanges() {
-//        if (mCrimeOpenForEdition != null){
-//            Log.d(TAG, "notifyChanges: updated position " + mCrimeOpenForEdition);
-//            mAdapter.notifyItemChanged(mCrimeOpenForEdition);
-//            mCrimeOpenForEdition = null;
-//        }
-//        else {
-            mAdapter.notifyDataSetChanged();
-//        }
-    }
 
     private class CrimeHolder extends RecyclerView.ViewHolder
             implements View.OnClickListener {
@@ -82,7 +67,6 @@ public class CrimeListFragment extends Fragment {
         private TextView mTitleTextView;
         private TextView mDateTextView;
         private CheckBox mSolvedCheckBox;
-        private Integer mPosition;
         private Crime mCrime;
         private static final String TAG = "CrimeHolder";
 
@@ -94,12 +78,11 @@ public class CrimeListFragment extends Fragment {
             mSolvedCheckBox = (CheckBox) itemView.findViewById(R.id.list_item_crime_solved_checkbox);
         }
 
-        public void bindCrime(Crime crime, Integer position) {
+        public void bindCrime(Crime crime) {
             mCrime = crime;
             mTitleTextView.setText(mCrime.getTitle());
             mDateTextView.setText(mCrime.getDate().toString());
             mSolvedCheckBox.setChecked(mCrime.isSolved());
-            mPosition = position;
         }
 
 
@@ -108,11 +91,6 @@ public class CrimeListFragment extends Fragment {
             Log.d(TAG, "onClick: clicked " + v);
 
             getActivity().setResult(1);
-
-//            Intent intent = CrimeActivity.newIntent(getActivity(), mCrime.getId());
-//            startActivity(intent);
-
-//            mCrimeOpenForEdition = mPosition;
 
             Intent intent = CrimePagerActivity.newIntent(getActivity(), mCrime.getId());
             startActivity(intent);
@@ -145,7 +123,7 @@ public class CrimeListFragment extends Fragment {
         public void onBindViewHolder(CrimeHolder holder, int position) {
             Crime crime = mCrimes.get(position);
 
-            holder.bindCrime(crime, position);
+            holder.bindCrime(crime);
         }
 
         @Override
