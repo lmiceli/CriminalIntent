@@ -18,6 +18,8 @@ import com.bignerdranch.android.criminalintent.model.CrimeLab;
 
 import java.util.List;
 
+import static com.bignerdranch.android.criminalintent.model.DateTimeUtils.formatDateTime;
+
 /**
  *
  */
@@ -81,7 +83,7 @@ public class CrimeListFragment extends Fragment {
         public void bindCrime(Crime crime) {
             mCrime = crime;
             mTitleTextView.setText(mCrime.getTitle());
-            mDateTextView.setText(mCrime.getDate().toString());
+            mDateTextView.setText(formatDateTime(getContext(), mCrime.getDate()));
             mSolvedCheckBox.setChecked(mCrime.isSolved());
         }
 
