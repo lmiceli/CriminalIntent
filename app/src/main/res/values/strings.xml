@@ -8,4 +8,15 @@
     <string name="crime_solved_label">Solved</string>
     <string name="title_activity_crime_pager">CrimePagerActivity</string>
     <string name="date_picker_title">Date of crime:</string>
+    <string name="new_crime">New Crime</string>
+    <string name="delete_crime">Delete Crime</string>
+    <string name="show_subtitle">Show Subtitle</string>
+    <string name="hide_subtitle">Hide Subtitle</string>
+    <string name="subtitle_format">%1s crimes</string>
+    <string name="empty_list_message">There are no crimes</string>
+    <string name="empty_list_new_crime_button">Add one</string>
+    <plurals name="subtitle_plural">
+        <item quantity="one">%1$s crime</item>
+        <item quantity="other">%1$s crimes</item>
+    </plurals>
 </resources>
