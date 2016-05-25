@@ -10,6 +10,7 @@ import android.provider.ContactsContract;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
+import android.support.v4.app.ShareCompat.IntentBuilder;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
@@ -32,7 +33,6 @@ import com.bignerdranch.android.criminalintent.model.DateTimeUtils;
 import java.util.Date;
 import java.util.UUID;
 
-import static android.content.Intent.createChooser;
 import static com.bignerdranch.android.criminalintent.model.DateTimeUtils.formatDate;
 import static com.bignerdranch.android.criminalintent.model.DateTimeUtils.formatTime;
 
@@ -121,14 +121,14 @@ public class CrimeFragment extends Fragment {
         mReportButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent i = new Intent(Intent.ACTION_SEND);
-                i.setType("text/plain");
-                i.putExtra(Intent.EXTRA_TEXT, getCrimeReport());
-                i.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crime_report_subject));
 
-                // force choose everytime
-                i = createChooser(i, getString(R.string.send_report));
-                startActivity(i);
+                IntentBuilder intentBuilder = IntentBuilder.from(getActivity());
+                intentBuilder.setChooserTitle(R.string.send_report)
+                        .setType("text/plain")
+                        .setSubject(getString(R.string.crime_report_subject))
+                        .setText(getCrimeReport())
+                        .startChooser();
+
             }
         });
 
@@ -209,7 +209,7 @@ public class CrimeFragment extends Fragment {
         if (suspect == null) {
             suspect = getString(R.string.crime_report_no_suspect);
         } else {
-            suspect = getString(R.string.crime_report_suspect);
+            suspect = getString(R.string.crime_report_suspect, suspect);
         }
 
         String report = getString(R.string.crime_report,
