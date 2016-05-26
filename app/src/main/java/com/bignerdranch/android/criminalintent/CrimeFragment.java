@@ -4,9 +4,11 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
+import android.provider.MediaStore;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
@@ -25,11 +27,14 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 
 import com.bignerdranch.android.criminalintent.model.Crime;
 import com.bignerdranch.android.criminalintent.model.CrimeLab;
 import com.bignerdranch.android.criminalintent.model.DateTimeUtils;
 
+import java.io.File;
 import java.util.Date;
 import java.util.UUID;
 
@@ -45,16 +50,22 @@ public class CrimeFragment extends Fragment {
     // id's to use in FragmentManager list
     private static final String DIALOG_DATE = "DialogDate";
     private static final String DIALOG_TIME = "DialogTime";
+    private static final String DIALOG_DISPLAY_IMAGE = "DialogDisplayImage";
     private static final int REQUEST_DATE = 0;
     private static final int REQUEST_TIME = 1;
     private static final int REQUEST_CONTACT = 2;
+    private static final int REQUEST_PHOTO = 3;
     private Crime mCrime;
     private EditText mTitleField;
     private Button mDateButton;
     private Button mTimeButton;
+    private CheckBox mSolvedCheckBox;
     private Button mReportButton;
     private Button mSuspectButton;
-    private CheckBox mSolvedCheckBox;
+    private ImageButton mPhotoButton;
+    private ImageView mPhotoView;
+    private File mPhotoFile;
+
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -64,6 +75,7 @@ public class CrimeFragment extends Fragment {
         UUID crimeId = (UUID) getArguments().getSerializable(ARG_CRIME_ID);
 
         mCrime = CrimeLab.get(getActivity()).getCrime(crimeId);
+        mPhotoFile = CrimeLab.get(getActivity()).getPhotoFile(mCrime);
     }
 
     @Nullable
@@ -71,17 +83,55 @@ public class CrimeFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_crime, container, false);
 
-        setTitle(v);
-        setDate(v);
-        setTime(v);
+        setTitleEditText(v);
+        setDateButton(v);
+        setTimeButton(v);
+        setSolvedCheckBox(v);
         setReportButton(v);
         setSuspectButton(v);
-        setSolved(v);
+        setPhotoButton(v);
+        setPhotoView(v);
 
         return v;
     }
 
-    private void setDate(View v) {
+    private void setPhotoView(View v) {
+        mPhotoView = (ImageView) v.findViewById(R.id.crime_photo);
+        buildDisplayImageDialog(v);
+        updatePhotoView();
+    }
+
+    private void updatePhotoView() {
+        if (mPhotoFile == null || !mPhotoFile.exists()) {
+            mPhotoView.setImageDrawable(null);
+        } else {
+            Bitmap bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(), getActivity());
+            mPhotoView.setImageBitmap(bitmap);
+        }
+    }
+
+    private void setPhotoButton(View v) {
+        mPhotoButton = (ImageButton) v.findViewById(R.id.crime_camera);
+
+        final Intent captureImage = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        PackageManager packageManager = getActivity().getPackageManager();
+        boolean canTakePhoto = mPhotoFile != null &&
+                captureImage.resolveActivity(packageManager) != null;
+
+        if (canTakePhoto) {
+            Uri uri = Uri.fromFile(mPhotoFile);
+            captureImage.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+        }
+
+        mPhotoButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivityForResult(captureImage, REQUEST_PHOTO);
+            }
+        });
+    }
+
+    private void setDateButton(View v) {
         mDateButton = (Button) v.findViewById(R.id.crime_date);
         updateDate();
         mDateButton.setOnClickListener(new View.OnClickListener() {
@@ -98,7 +148,7 @@ public class CrimeFragment extends Fragment {
         });
     }
 
-    private void setTime(View v) {
+    private void setTimeButton(View v) {
         mTimeButton = (Button) v.findViewById(R.id.crime_time);
         updateTime();
         mTimeButton.setOnClickListener(new View.OnClickListener() {
@@ -111,6 +161,18 @@ public class CrimeFragment extends Fragment {
                 // This can be explicitly called when using 2 fragments hosted by the same activity
                 dialog.setTargetFragment(CrimeFragment.this, REQUEST_TIME);
                 dialog.show(manager, DIALOG_TIME);
+            }
+        });
+    }
+
+    private void buildDisplayImageDialog(View v) {
+        mPhotoView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FragmentManager manager = getFragmentManager();
+                DisplayImageFragment dialog = DisplayImageFragment
+                        .newInstance(mPhotoFile);
+                dialog.show(manager, DIALOG_DISPLAY_IMAGE);
             }
         });
     }
@@ -159,7 +221,7 @@ public class CrimeFragment extends Fragment {
 
     }
 
-    private void setTitle(View v) {
+    private void setTitleEditText(View v) {
         mTitleField = (EditText) v.findViewById(R.id.crime_title);
         mTitleField.setText(mCrime.getTitle());
         mTitleField.addTextChangedListener(new TextWatcher() {
@@ -181,7 +243,7 @@ public class CrimeFragment extends Fragment {
         });
     }
 
-    private void setSolved(View v) {
+    private void setSolvedCheckBox(View v) {
         mSolvedCheckBox = (CheckBox) v.findViewById(R.id.crime_solved);
         mSolvedCheckBox.setChecked(mCrime.isSolved());
         mSolvedCheckBox.setOnCheckedChangeListener(new OnCheckedChangeListener() {
@@ -251,13 +313,11 @@ public class CrimeFragment extends Fragment {
             // preserve time.
             mCrime.setDate(DateTimeUtils.mergeDateAndTime(date, mCrime.getDate()));
             updateDate();
-        }
-        else if (requestCode == REQUEST_TIME) {
+        } else if (requestCode == REQUEST_TIME) {
             Date time = (Date) data.getSerializableExtra(TimePickerFragment.EXTRA_TIME);
             mCrime.setDate(DateTimeUtils.mergeDateAndTime(mCrime.getDate(), time));
             updateTime();
-        }
-        else if (requestCode == REQUEST_CONTACT && data != null) {
+        } else if (requestCode == REQUEST_CONTACT && data != null) {
             Uri contactUri = data.getData();
             // Specify which fields you want your query to return
             // values for.
@@ -282,6 +342,8 @@ public class CrimeFragment extends Fragment {
             } finally {
                 c.close();
             }
+        } else if (requestCode == REQUEST_PHOTO) {
+            updatePhotoView();
         }
 
     }
