@@ -22,6 +22,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
@@ -65,7 +66,11 @@ public class CrimeFragment extends Fragment {
     private ImageButton mPhotoButton;
     private ImageView mPhotoView;
     private File mPhotoFile;
+    private Callbacks mCallbacks;
 
+    public interface Callbacks {
+        void onCrimeUpdated(Crime crime);
+    }
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -76,6 +81,19 @@ public class CrimeFragment extends Fragment {
 
         mCrime = CrimeLab.get(getActivity()).getCrime(crimeId);
         mPhotoFile = CrimeLab.get(getActivity()).getPhotoFile(mCrime);
+
+    }
+
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        mCallbacks = (Callbacks) activity;
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        mCallbacks = null;
     }
 
     @Nullable
@@ -95,19 +113,50 @@ public class CrimeFragment extends Fragment {
         return v;
     }
 
+    /**
+     * necessary for the tablet 2pane to stay updated on crime edition
+     * "CrimeFragment will be doing a Time Warp two-step a lot internally: Jump to the left, save  mCrime to
+        CrimeLab . Step to the right, call  mCallbacks.onCrimeUpdated(Crime)."
+     */
+    private void updateCrime() {
+        CrimeLab.get(getActivity()).updateCrime(mCrime);
+        mCallbacks.onCrimeUpdated(mCrime);
+    }
+
     private void setPhotoView(View v) {
         mPhotoView = (ImageView) v.findViewById(R.id.crime_photo);
         buildDisplayImageDialog(v);
+
         updatePhotoView();
     }
 
     private void updatePhotoView() {
-        if (mPhotoFile == null || !mPhotoFile.exists()) {
-            mPhotoView.setImageDrawable(null);
-        } else {
-            Bitmap bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(), getActivity());
-            mPhotoView.setImageBitmap(bitmap);
-        }
+
+        ViewTreeObserver.OnGlobalLayoutListener listener = new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+
+                if (mPhotoFile == null || !mPhotoFile.exists()) {
+                    mPhotoView.setImageDrawable(null);
+                } else {
+                    Bitmap bitmap;
+
+                    if (mPhotoView.getHeight() > 0 &&
+                            mPhotoView.getWidth() > 0) {
+                        bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(),
+                                mPhotoView.getWidth(), mPhotoView.getHeight());
+                    } else {
+                        bitmap = PictureUtils.getScaledBitmap(mPhotoFile.getPath(), getActivity());
+                    }
+
+                    mPhotoView.setImageBitmap(bitmap);
+                }
+
+                mPhotoView.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+            }
+        };
+        mPhotoView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
+
     }
 
     private void setPhotoButton(View v) {
@@ -232,8 +281,8 @@ public class CrimeFragment extends Fragment {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-
                 mCrime.setTitle(s.toString());
+                updateCrime();
             }
 
             @Override
@@ -251,6 +300,7 @@ public class CrimeFragment extends Fragment {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 // Set the crime's solved property
                 mCrime.setSolved(isChecked);
+                updateCrime();
             }
         });
     }
@@ -312,10 +362,12 @@ public class CrimeFragment extends Fragment {
             Date date = (Date) data.getSerializableExtra(DatePickerFragment.EXTRA_DATE);
             // preserve time.
             mCrime.setDate(DateTimeUtils.mergeDateAndTime(date, mCrime.getDate()));
+            updateCrime();
             updateDate();
         } else if (requestCode == REQUEST_TIME) {
             Date time = (Date) data.getSerializableExtra(TimePickerFragment.EXTRA_TIME);
             mCrime.setDate(DateTimeUtils.mergeDateAndTime(mCrime.getDate(), time));
+            updateCrime();
             updateTime();
         } else if (requestCode == REQUEST_CONTACT && data != null) {
             Uri contactUri = data.getData();
@@ -339,11 +391,13 @@ public class CrimeFragment extends Fragment {
                 String suspect = c.getString(0);
                 mCrime.setSuspect(suspect);
                 mSuspectButton.setText(suspect);
+                updateCrime();
             } finally {
                 c.close();
             }
         } else if (requestCode == REQUEST_PHOTO) {
             updatePhotoView();
+            updateCrime();
         }
 
     }
