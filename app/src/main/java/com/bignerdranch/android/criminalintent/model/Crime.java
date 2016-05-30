@@ -12,7 +12,7 @@ public class Crime {
     private String mTitle;
     private Date mDate;
     private boolean mSolved;
-    private String mSuspect;
+    private String mSuspectId;
 
     public Crime() {
         this(UUID.randomUUID());
@@ -51,12 +51,12 @@ public class Crime {
         mSolved = solved;
     }
 
-    public String getSuspect() {
-        return mSuspect;
+    public String getSuspectId() {
+        return mSuspectId;
     }
 
-    public void setSuspect(String suspect) {
-        mSuspect = suspect;
+    public void setSuspectId(String suspectId) {
+        mSuspectId = suspectId;
     }
 
     public String getPhotoFilename() {

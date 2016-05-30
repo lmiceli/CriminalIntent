@@ -1,5 +1,6 @@
 package com.bignerdranch.android.criminalintent;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -10,9 +11,11 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.ShareCompat.IntentBuilder;
+import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.format.DateFormat;
@@ -30,6 +33,7 @@ import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import com.bignerdranch.android.criminalintent.model.Crime;
 import com.bignerdranch.android.criminalintent.model.CrimeLab;
@@ -56,6 +60,7 @@ public class CrimeFragment extends Fragment {
     private static final int REQUEST_TIME = 1;
     private static final int REQUEST_CONTACT = 2;
     private static final int REQUEST_PHOTO = 3;
+    private static final int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 0;
     private Crime mCrime;
     private EditText mTitleField;
     private Button mDateButton;
@@ -63,6 +68,7 @@ public class CrimeFragment extends Fragment {
     private CheckBox mSolvedCheckBox;
     private Button mReportButton;
     private Button mSuspectButton;
+    private ImageButton mCallSuspectButton;
     private ImageButton mPhotoButton;
     private ImageView mPhotoView;
     private File mPhotoFile;
@@ -107,6 +113,7 @@ public class CrimeFragment extends Fragment {
         setSolvedCheckBox(v);
         setReportButton(v);
         setSuspectButton(v);
+        setCallSuspectButton(v);
         setPhotoButton(v);
         setPhotoView(v);
 
@@ -116,7 +123,7 @@ public class CrimeFragment extends Fragment {
     /**
      * necessary for the tablet 2pane to stay updated on crime edition
      * "CrimeFragment will be doing a Time Warp two-step a lot internally: Jump to the left, save  mCrime to
-        CrimeLab . Step to the right, call  mCallbacks.onCrimeUpdated(Crime)."
+     * CrimeLab . Step to the right, call  mCallbacks.onCrimeUpdated(Crime)."
      */
     private void updateCrime() {
         CrimeLab.get(getActivity()).updateCrime(mCrime);
@@ -258,15 +265,115 @@ public class CrimeFragment extends Fragment {
             }
         });
 
-        if (mCrime.getSuspect() != null) {
-            mSuspectButton.setText(mCrime.getSuspect());
-        }
+        mSuspectButton.setText(getSuspectName());
 
         PackageManager packageManager = getActivity().getPackageManager();
         if (packageManager.resolveActivity(pickContact,
                 PackageManager.MATCH_DEFAULT_ONLY) == null) {
             mSuspectButton.setEnabled(false);
         }
+
+    }
+
+    /**
+     *
+     * @return
+     */
+    private String getSuspectName() {
+        String suspect = null;
+        // Find suspect name in contacts db
+        if (mCrime.getSuspectId() != null) {
+
+            // dafault in case no permission to read name
+            suspect = mCrime.getSuspectId();
+
+            int permissionToReadContacts = ContextCompat.checkSelfPermission(getActivity(),
+                    Manifest.permission.READ_CONTACTS);
+
+            if (PackageManager.PERMISSION_GRANTED == permissionToReadContacts) {
+
+                // TODO make a generic code to query without so much boilerplate
+
+                String[] queryFields = new String[]{
+                        ContactsContract.Contacts.DISPLAY_NAME
+                };
+
+                // TODO make this in some utils
+                String selection = ContactsContract.Contacts._ID + " = ?";
+
+                String[] selectionArgs = new String[]{
+                        mCrime.getSuspectId(),
+                };
+
+                Cursor c = getActivity().getContentResolver()
+                        .query(ContactsContract.Contacts.CONTENT_URI,
+                                queryFields, selection, selectionArgs, null);
+                try {
+                    if (c.getCount() > 0) {
+                        c.moveToFirst();
+                        suspect = c.getString(0);
+                    }
+
+                } finally {
+                    c.close();
+                }
+
+            } else {
+                askForReadContactsPermission();
+            }
+
+        }
+
+        return suspect;
+    }
+
+    private void setCallSuspectButton(View view) {
+        mCallSuspectButton = (ImageButton) view.findViewById(R.id.crime_call_suspect);
+        mCallSuspectButton.setEnabled(false); // Default
+
+        boolean canReadContacts = ContextCompat.checkSelfPermission(getActivity(),
+                Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+
+        if (mCrime.getSuspectId() != null && canReadContacts) {
+
+            String[] queryFields = new String[]{
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+            };
+
+            // TODO make this in some utils
+            String selection = ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?";
+
+            String[] selectionArgs = new String[]{
+                    mCrime.getSuspectId(),
+            };
+
+            Cursor c = getActivity().getContentResolver()
+                    .query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            queryFields, selection, selectionArgs, null);
+            try {
+                if (c.getCount() > 0) {
+                    c.moveToFirst();
+                    String phoneNumber = c.getString(0);
+
+                    mCallSuspectButton.setEnabled(true);
+
+                    final Intent callSuspect = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phoneNumber));
+
+                    mCallSuspectButton.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            startActivity(callSuspect);
+                        }
+                    });
+
+                }
+
+            } finally {
+                c.close();
+            }
+
+        }
+
 
     }
 
@@ -317,7 +424,7 @@ public class CrimeFragment extends Fragment {
         String dateFormat = "EEE, MMM dd";
         String dateString = DateFormat.format(dateFormat, mCrime.getDate()).toString();
 
-        String suspect = mCrime.getSuspect();
+        String suspect = getSuspectName();
         if (suspect == null) {
             suspect = getString(R.string.crime_report_no_suspect);
         } else {
@@ -374,6 +481,7 @@ public class CrimeFragment extends Fragment {
             // Specify which fields you want your query to return
             // values for.
             String[] queryFields = new String[]{
+                    ContactsContract.Contacts._ID,
                     ContactsContract.Contacts.DISPLAY_NAME
             };
             // Perform your query - the contactUri is like a "where"
@@ -388,9 +496,10 @@ public class CrimeFragment extends Fragment {
                 // Pull out the first column of the first row of data -
                 // that is your suspect's name.
                 c.moveToFirst();
-                String suspect = c.getString(0);
-                mCrime.setSuspect(suspect);
-                mSuspectButton.setText(suspect);
+                String suspectId = c.getString(0);
+                String suspectName = c.getString(1);
+                mCrime.setSuspectId(suspectId);
+                mSuspectButton.setText(suspectName);
                 updateCrime();
             } finally {
                 c.close();
@@ -400,6 +509,35 @@ public class CrimeFragment extends Fragment {
             updateCrime();
         }
 
+    }
+
+    private void askForReadContactsPermission() {
+        // Should we show an explanation?
+        if (ActivityCompat.shouldShowRequestPermissionRationale(getActivity(),
+                Manifest.permission.READ_CONTACTS)) {
+
+            Toast.makeText(getActivity(), R.string.read_contacts_rationale, Toast.LENGTH_SHORT).show();
+        } else {
+
+            // No explanation needed, we can request the permission.
+            ActivityCompat.requestPermissions(getActivity(),
+                    new String[]{Manifest.permission.READ_CONTACTS},
+                    MY_PERMISSIONS_REQUEST_READ_CONTACTS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_READ_CONTACTS:
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission granted
+                    mSuspectButton.setText(getSuspectName());
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
     }
 
     @Override
