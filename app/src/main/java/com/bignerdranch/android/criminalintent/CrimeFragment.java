@@ -280,7 +280,7 @@ public class CrimeFragment extends Fragment {
      * @return
      */
     private String getSuspectName() {
-        String suspect = null;
+        String suspect = getString(R.string.crime_suspect_text);
         // Find suspect name in contacts db
         if (mCrime.getSuspectId() != null) {
 
